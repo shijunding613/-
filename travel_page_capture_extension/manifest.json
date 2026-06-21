@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Travel Page Capture - Russia Planner v5",
+  "version": "0.5.0",
+  "description": "读取当前酒店/火车网页的可见信息，发送到俄罗斯旅行时间表。",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+  "action": {
+    "default_title": "导入到旅行时间表",
+    "default_popup": "popup.html"
+  }
+}
