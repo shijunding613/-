@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>俄罗斯横穿旅行 · 可互动时间表</title>
+<style>
+:root{
+  --line:#e5e7eb; --text:#0f172a; --muted:#64748b; --blue:#2563eb; --bg:#f8fafc;
+  --hourH:60px; --slotH:30px;
+}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;z-index:20;background:white;border-bottom:1px solid var(--line);padding:14px 18px;display:flex;gap:16px;align-items:center;justify-content:space-between}
+h1{font-size:20px;margin:0}
+.small{font-size:12px;color:var(--muted)}
+.wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;padding:16px}
+.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+textarea{width:100%;height:220px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;line-height:1.5;resize:vertical}
+button,input,select{font:inherit}
+button{border:0;border-radius:10px;padding:9px 12px;background:#e2e8f0;cursor:pointer;margin:3px}
+button.primary{background:var(--blue);color:#fff}
+button.danger{background:#fee2e2;color:#991b1b}
+button.green{background:#dcfce7;color:#166534}
+.controls{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;background:white}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 7px;border-radius:999px;background:#f1f5f9}
+.dot{width:10px;height:10px;border-radius:50%}
+.calendarBox{background:white;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.weekbar{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)}
+.weektitle{font-weight:700}
+.calendar{display:grid;grid-template-columns:70px repeat(7,minmax(130px,1fr));height:calc(100vh - 126px);min-height:760px;overflow:auto;position:relative}
+.corner,.dayHead{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line);height:58px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.corner{left:0;z-index:12;border-right:1px solid var(--line)}
+.dayHead{border-right:1px solid var(--line);white-space:pre-line;text-align:center}
+.timebar{position:sticky;left:0;z-index:5;background:#fff;border-right:1px solid var(--line);height:1080px;grid-row:2}
+.timeSlot{height:60px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;justify-content:center;align-items:flex-start;padding-top:2px}
+.dayCol{position:relative;height:1080px;border-right:1px solid var(--line);background:
+  repeating-linear-gradient(to bottom,#ffffff 0,#ffffff 29px,#f1f5f9 30px,#ffffff 31px,#ffffff 59px,#e5e7eb 60px)}
+.event{position:absolute;left:6px;right:6px;border-radius:8px;border-left:4px solid rgba(15,23,42,.45);padding:6px 7px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.18);font-size:12px;line-height:1.25;cursor:pointer}
+.event:hover{outline:2px solid #60a5fa}
+.event.selected{outline:3px solid #2563eb}
+.event .title{font-weight:700}
+.event .meta{font-size:11px;color:#334155;margin-top:3px}
+.event[contenteditable="true"]:focus{outline:3px solid #f59e0b}
+.tableWrap{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
+th{position:sticky;top:0;background:#f1f5f9;z-index:1}
+td[contenteditable=true]{background:#fffdf7}
+@media(max-width:1100px){.wrap{grid-template-columns:1fr}.calendar{height:760px}}
+@media print{
+  header,.panel,.weekbar button{display:none!important}
+  .wrap{display:block;padding:0}
+  .calendarBox{border:0;box-shadow:none}
+  .calendar{height:auto;overflow:visible}
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>俄罗斯横穿旅行 · 可互动时间表</h1>
+    <div class="small">粘贴一段行程 → 自动识别日期/转场/火车/酒店 → 生成周视图。所有块都可点选编辑，数据保存在浏览器本地。</div>
+  </div>
+  <div class="controls">
+    <button class="primary" onclick="loadDemo()">载入本次20天计划</button>
+    <button onclick="saveLocal()">保存</button>
+    <button onclick="loadLocal()">读取保存</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="panel">
+    <h3 style="margin:0 0 8px">1）粘贴文本并识别</h3>
+    <textarea id="rawText" placeholder="把类似 D1，7月11日：圣彼得堡 → 喀山 ... 的一整段计划粘贴到这里"></textarea>
+    <div class="controls">
+      <button class="primary" onclick="parseText()">识别并填入表格</button>
+      <button onclick="fillExampleText()">填入示例文本</button>
+      <button class="danger" onclick="clearAll()">清空</button>
+    </div>
+    <div class="small">识别规则：优先识别 D1/D2、7月11日、箭头“→”、火车/夜车/上午/下午/晚上/住宿等关键词。识别后可以手动修正。</div>
+
+    <h3>2）编辑选中的时间块</h3>
+    <input type="hidden" id="editId">
+    <label>标题</label><input id="editTitle" oninput="updateSelected()">
+    <div class="row2">
+      <div><label>日期</label><input id="editDate" type="date" oninput="updateSelected()"></div>
+      <div><label>类型</label><select id="editType" onchange="updateTypeColor();updateSelected()"></select></div>
+    </div>
+    <div class="row2">
+      <div><label>开始</label><input id="editStart" type="time" step="300" oninput="updateSelected()"></div>
+      <div><label>结束</label><input id="editEnd" type="time" step="300" oninput="updateSelected()"></div>
+    </div>
+    <label>城市/路线</label><input id="editCity" oninput="updateSelected()">
+    <label>详情/备注</label><input id="editDetails" oninput="updateSelected()">
+    <div class="controls">
+      <button class="green" onclick="addEvent()">新增事件</button>
+      <button class="danger" onclick="deleteSelected()">删除选中</button>
+    </div>
+
+    <h3>3）导出</h3>
+    <div class="controls">
+      <button onclick="exportCSV()">导出CSV</button>
+      <button onclick="exportJSON()">导出JSON</button>
+      <button onclick="exportICS()">导出ICS日历</button>
+      <button onclick="window.print()">打印/PDF</button>
+    </div>
+
+    <div class="legend">
+      <span class="badge"><span class="dot" style="background:#dbeafe"></span>火车</span>
+      <span class="badge"><span class="dot" style="background:#e0f2fe"></span>交通</span>
+      <span class="badge"><span class="dot" style="background:#dcfce7"></span>游览</span>
+      <span class="badge"><span class="dot" style="background:#f3e8ff"></span>酒店</span>
+      <span class="badge"><span class="dot" style="background:#ffedd5"></span>过境</span>
+      <span class="badge"><span class="dot" style="background:#fef3c7"></span>餐饮</span>
+    </div>
+
+    <h3>识别结果表</h3>
+    <div class="tableWrap"><table id="eventTable"></table></div>
+  </aside>
+
+  <main class="calendarBox">
+    <div class="weekbar">
+      <button onclick="moveWeek(-7)">← 上周</button>
+      <div class="weektitle" id="weekTitle"></div>
+      <button onclick="moveWeek(7)">下周 →</button>
+    </div>
+    <div class="calendar" id="calendar"></div>
+  </main>
+</div>
+
+<script>
+const demoEvents = [{"id": "e1", "date": "2026-07-11", "start": "10:00", "end": "13:00", "type": "游览", "city": "圣彼得堡", "title": "最后轻松行程", "details": "涅瓦大街、喀山大教堂、滴血救世主教堂外观；不要安排太累。", "note": "可删减", "color": "#dcfce7"}, {"id": "e2", "date": "2026-07-11", "start": "18:30", "end": "23:30", "type": "火车", "city": "圣彼得堡→喀山", "title": "夜车/卧铺去喀山", "details": "建议选二等或三等卧铺；具体车次需俄铁最终核验。", "note": "必须核验", "color": "#dbeafe"}, {"id": "e3", "date": "2026-07-12", "start": "08:00", "end": "10:00", "type": "交通", "city": "喀山", "title": "抵达喀山+去酒店", "details": "入住鲍曼街或喀山克里姆林宫附近；如未到入住时间，可先寄存行李。", "note": "机动", "color": "#e0f2fe"}, {"id": "e4", "date": "2026-07-12", "start": "15:00", "end": "16:00", "type": "酒店", "city": "喀山", "title": "入住喀山酒店", "details": "居住1晚；优先中心区，省交通时间。", "note": "", "color": "#f3e8ff"}, {"id": "e5", "date": "2026-07-12", "start": "18:00", "end": "21:00", "type": "游览/餐饮", "city": "喀山", "title": "鲍曼街+鞑靼菜", "details": "echpochmak、chak-chak、羊肉汤、kystyby。", "note": "", "color": "#dcfce7"}, {"id": "e6", "date": "2026-07-13", "start": "09:00", "end": "17:00", "type": "游览", "city": "喀山", "title": "喀山一日游", "details": "喀山克里姆林宫、库尔沙里夫清真寺、鲍曼街、河边。", "note": "", "color": "#dcfce7"}, {"id": "e7", "date": "2026-07-13", "start": "18:00", "end": "19:00", "type": "酒店", "city": "喀山", "title": "退房/取行李", "details": "提前确认酒店寄存行李时间。", "note": "", "color": "#f3e8ff"}, {"id": "e8", "date": "2026-07-13", "start": "20:00", "end": "23:30", "type": "火车", "city": "喀山→叶卡捷琳堡", "title": "夜车去叶卡捷琳堡", "details": "常见耗时约13–16小时；具体车次需核验。", "note": "必须核验", "color": "#dbeafe"}, {"id": "e9", "date": "2026-07-14", "start": "10:00", "end": "12:30", "type": "交通/酒店", "city": "叶卡捷琳堡", "title": "抵达+入住休息", "details": "住市中心；普通商务酒店或青旅单间即可。", "note": "", "color": "#e0f2fe"}, {"id": "e10", "date": "2026-07-14", "start": "14:00", "end": "18:00", "type": "游览", "city": "叶卡捷琳堡", "title": "欧洲到亚洲节点", "details": "欧亚分界碑、滴血教堂、伊谢季河边。", "note": "", "color": "#dcfce7"}, {"id": "e11", "date": "2026-07-15", "start": "09:00", "end": "12:30", "type": "游览", "city": "叶卡捷琳堡", "title": "叶利钦中心/市区", "details": "上午补看叶利钦中心或市区。", "note": "可删减", "color": "#dcfce7"}, {"id": "e12", "date": "2026-07-15", "start": "15:30", "end": "23:30", "type": "火车", "city": "叶卡捷琳堡→伊尔库茨克", "title": "长途火车开始", "details": "最快约49小时，平均约2天4小时；准备火车补给。", "note": "必须核验", "color": "#dbeafe"}, {"id": "e13", "date": "2026-07-16", "start": "08:00", "end": "23:30", "type": "火车", "city": "火车上", "title": "西伯利亚铁路体验", "details": "泡面、面包、水果、坚果、湿巾、拖鞋、充电宝；不安排任何事。", "note": "", "color": "#dbeafe"}, {"id": "e14", "date": "2026-07-17", "start": "08:00", "end": "12:00", "type": "交通/休息", "city": "伊尔库茨克", "title": "抵达伊尔库茨克", "details": "到得早可寄存行李；到得晚直接休息。", "note": "机动", "color": "#e5e7eb"}, {"id": "e15", "date": "2026-07-17", "start": "13:30", "end": "17:30", "type": "游览", "city": "伊尔库茨克", "title": "伊尔库茨克轻松逛", "details": "130街区、安加拉河、主显节大教堂。", "note": "可删减", "color": "#dcfce7"}, {"id": "e16", "date": "2026-07-17", "start": "18:00", "end": "20:00", "type": "酒店", "city": "伊尔库茨克", "title": "住伊尔库茨克", "details": "长途火车后先住一晚，不当天赶去湖边。", "note": "", "color": "#f3e8ff"}, {"id": "e17", "date": "2026-07-18", "start": "09:00", "end": "12:00", "type": "交通", "city": "伊尔库茨克→利斯特维扬卡", "title": "前往利斯特维扬卡", "details": "适合作为贝加尔湖第一站。", "note": "必须核验", "color": "#e0f2fe"}, {"id": "e18", "date": "2026-07-18", "start": "13:00", "end": "18:00", "type": "游览", "city": "利斯特维扬卡", "title": "贝加尔湖第一站", "details": "博物馆、湖边鱼市、切尔斯基观景台、湖边散步。", "note": "", "color": "#dcfce7"}, {"id": "e19", "date": "2026-07-18", "start": "18:30", "end": "20:00", "type": "餐饮/酒店", "city": "利斯特维扬卡", "title": "湖边晚餐+住宿", "details": "烟熏欧姆鱼、鱼汤、俄式土豆泥。", "note": "", "color": "#fef3c7"}, {"id": "e20", "date": "2026-07-19", "start": "08:00", "end": "18:00", "type": "交通", "city": "利斯特维扬卡→奥利洪岛", "title": "转场去奥利洪岛", "details": "住胡日尔村；重点确认热水、独立卫生间、是否代订北线。", "note": "必须核验", "color": "#e0f2fe"}, {"id": "e21", "date": "2026-07-19", "start": "18:00", "end": "20:00", "type": "酒店", "city": "胡日尔村", "title": "入住奥利洪岛", "details": "民宿或小酒店，条件比城市差。", "note": "", "color": "#f3e8ff"}, {"id": "e22", "date": "2026-07-20", "start": "09:00", "end": "17:00", "type": "游览", "city": "奥利洪岛", "title": "北线一日游", "details": "合波角、湖岸悬崖、草原、贝加尔湖远景。", "note": "核心", "color": "#dcfce7"}, {"id": "e23", "date": "2026-07-21", "start": "06:00", "end": "08:30", "type": "游览", "city": "奥利洪岛", "title": "萨满岩日出/散步", "details": "体力一般就轻松安排。", "note": "机动", "color": "#dcfce7"}, {"id": "e24", "date": "2026-07-21", "start": "10:00", "end": "16:00", "type": "游览/休息", "city": "奥利洪岛", "title": "自由活动/南线半日", "details": "留作天气容错；若北线天气差，可补救。", "note": "机动", "color": "#dcfce7"}, {"id": "e25", "date": "2026-07-22", "start": "08:00", "end": "18:00", "type": "交通", "city": "奥利洪岛→伊尔库茨克", "title": "返回伊尔库茨克", "details": "不要直接赶下一段火车；轮渡/拼车/路况都有风险。", "note": "必须核验", "color": "#e0f2fe"}, {"id": "e26", "date": "2026-07-22", "start": "19:00", "end": "21:00", "type": "补给/酒店", "city": "伊尔库茨克", "title": "洗衣+补给+整理行李", "details": "为下一段去乌兰乌德做准备。", "note": "", "color": "#f3e8ff"}, {"id": "e27", "date": "2026-07-23", "start": "09:00", "end": "17:00", "type": "火车", "city": "伊尔库茨克→乌兰乌德", "title": "火车去乌兰乌德", "details": "常见约8小时；具体车次核验。", "note": "必须核验", "color": "#dbeafe"}, {"id": "e28", "date": "2026-07-23", "start": "18:00", "end": "20:30", "type": "游览/餐饮", "city": "乌兰乌德", "title": "列宁头像广场+布里亚特餐", "details": "文化上明显进入蒙古—西伯利亚区域。", "note": "", "color": "#dcfce7"}, {"id": "e29", "date": "2026-07-24", "start": "09:00", "end": "12:30", "type": "游览", "city": "乌兰乌德", "title": "伊沃尔金斯基喇嘛寺", "details": "上午去，下午留给取行李/候车。", "note": "", "color": "#dcfce7"}, {"id": "e30", "date": "2026-07-24", "start": "18:00", "end": "23:30", "type": "火车", "city": "乌兰乌德→符拉迪沃斯托克", "title": "远东长途火车开始", "details": "约2天21小时；准备两顿正餐、水、湿巾、耳塞。", "note": "必须核验", "color": "#dbeafe"}, {"id": "e31", "date": "2026-07-25", "start": "08:00", "end": "23:30", "type": "火车", "city": "火车上", "title": "横穿远东方向", "details": "这天火车上，不安排景点。", "note": "", "color": "#dbeafe"}, {"id": "e32", "date": "2026-07-26", "start": "08:00", "end": "23:30", "type": "火车", "city": "火车上", "title": "继续火车", "details": "可能比较疲劳，注意休息。", "note": "", "color": "#dbeafe"}, {"id": "e33", "date": "2026-07-27", "start": "08:00", "end": "12:00", "type": "交通/酒店", "city": "符拉迪沃斯托克", "title": "抵达+入住/寄存", "details": "住市中心、火车站、金角湾附近。", "note": "机动", "color": "#e0f2fe"}, {"id": "e34", "date": "2026-07-27", "start": "14:00", "end": "18:00", "type": "游览", "city": "符拉迪沃斯托克", "title": "远东终点仪式感", "details": "火车站、金角湾大桥、海边步行街。", "note": "", "color": "#dcfce7"}, {"id": "e35", "date": "2026-07-28", "start": "09:00", "end": "18:00", "type": "游览", "city": "符拉迪沃斯托克", "title": "符拉迪沃斯托克一日游", "details": "托卡列夫斯基灯塔、鹰巢山、俄罗斯岛。", "note": "", "color": "#dcfce7"}, {"id": "e36", "date": "2026-07-28", "start": "19:00", "end": "21:00", "type": "餐饮", "city": "符拉迪沃斯托克", "title": "海鲜晚餐", "details": "先问总价，避免时价不明海鲜打穿预算。", "note": "预算控制", "color": "#fef3c7"}, {"id": "e37", "date": "2026-07-29", "start": "07:30", "end": "12:00", "type": "交通", "city": "符拉迪沃斯托克/乌苏里斯克→格罗迭科沃", "title": "去跨境站/口岸", "details": "不要安排远郊游；前一晚确认车、通关、购票。", "note": "高风险核验", "color": "#e0f2fe"}, {"id": "e38", "date": "2026-07-29", "start": "12:00", "end": "15:30", "type": "过境", "city": "格罗迭科沃", "title": "购票+通关+候车", "details": "车票可能需持护照在指定窗口购买；提前办理通关。", "note": "高风险核验", "color": "#ffedd5"}, {"id": "e39", "date": "2026-07-29", "start": "15:43", "end": "18:30", "type": "过境火车", "city": "格罗迭科沃→绥芬河", "title": "402/401国际旅客列车候选", "details": "以当天车站/口岸通知为准，跨境日必须保守安排。", "note": "高风险核验", "color": "#ffedd5"}, {"id": "e40", "date": "2026-07-29", "start": "19:00", "end": "20:00", "type": "酒店", "city": "绥芬河", "title": "入住绥芬河", "details": "不要当天硬赶哈尔滨，跨境日留一晚。", "note": "", "color": "#f3e8ff"}, {"id": "e41", "date": "2026-07-30", "start": "09:00", "end": "15:00", "type": "火车/动车", "city": "绥芬河→哈尔滨", "title": "回哈尔滨", "details": "最终以12306/车站信息为准。", "note": "必须核验", "color": "#e5e7eb"}, {"id": "e42", "date": "2026-07-30", "start": "15:00", "end": "17:00", "type": "收尾", "city": "哈尔滨", "title": "抵达整理", "details": "收尾日不安排复杂行程。", "note": "", "color": "#e5e7eb"}];
+const demoText = "D1，7月11日：圣彼得堡 → 喀山\n白天在圣彼得堡最后补一个轻松行程。晚上或下午坐火车去喀山。\n住宿：火车卧铺。\n\nD2，7月12日：抵达喀山\n住鲍曼街或喀山克里姆林宫附近。晚上可以逛鲍曼街，吃鞑靼菜。\n住宿：喀山1晚。\n\nD3，7月13日：喀山一日游 → 夜车去叶卡捷琳堡\n白天看喀山克里姆林宫、库尔沙里夫清真寺、鲍曼街、河边。晚上坐火车去叶卡捷琳堡。\n\nD4，7月14日：叶卡捷琳堡\n抵达后入住休息。下午去欧亚分界碑、滴血教堂、伊谢季河边。\n\nD5，7月15日：叶卡捷琳堡 → 伊尔库茨克\n上午补看叶利钦中心或市区，下午/晚上坐火车去伊尔库茨克。\n\nD6，7月16日：火车上\n这天就是西伯利亚铁路体验，不安排任何事。\n\nD7，7月17日：抵达伊尔库茨克\n如果到得早，逛130街区、安加拉河、主显节大教堂。如果到得晚，直接休息。\n\nD8，7月18日：伊尔库茨克 → 利斯特维扬卡\n从伊尔库茨克去利斯特维扬卡，开始看贝加尔湖。\n\nD9，7月19日：利斯特维扬卡 → 奥利洪岛\n这天主要是转场去奥利洪岛，住胡日尔村。\n\nD10，7月20日：奥利洪岛北线一日游\n看合波角、湖岸悬崖、草原、贝加尔湖远景。\n\nD11，7月21日：奥利洪岛自由活动 / 南线半日\n上午可以去萨满岩看日出或湖边散步。体力好就参加南线，体力一般就休息。\n\nD12，7月22日：奥利洪岛 → 伊尔库茨克\n返回伊尔库茨克。晚上住伊尔库茨克，洗衣服、补给、整理行李。\n\nD13，7月23日：伊尔库茨克 → 乌兰乌德\n坐火车去乌兰乌德。晚上看列宁头像广场、吃布里亚特餐。\n\nD14，7月24日：乌兰乌德半日 → 火车去符拉迪沃斯托克\n上午去伊沃尔金斯基喇嘛寺，下午或晚上坐火车去符拉迪沃斯托克。\n\nD15，7月25日：火车上\n继续横穿远东方向。\n\nD16，7月26日：火车上\n继续火车，注意休息。\n\nD17，7月27日：抵达符拉迪沃斯托克\n下午看符拉迪沃斯托克火车站、金角湾大桥、海边步行街。\n\nD18，7月28日：符拉迪沃斯托克一日游\n托卡列夫斯基灯塔、鹰巢山观景台、俄罗斯岛、海鲜晚餐。\n\nD19，7月29日：符拉迪沃斯托克 / 乌苏里斯克 → 格罗迭科沃 → 绥芬河\n这天过境回中国。格罗迭科沃站始发时间候选为15:43。住宿：绥芬河。\n\nD20，7月30日：绥芬河 → 哈尔滨\n从绥芬河坐动车/火车回哈尔滨，作为收尾。\n";
+const typeColors = {
+  "火车":"#dbeafe","交通":"#e0f2fe","交通/酒店":"#e0f2fe","游览":"#dcfce7",
+  "游览/餐饮":"#dcfce7","游览/休息":"#dcfce7","酒店":"#f3e8ff","补给/酒店":"#f3e8ff",
+  "过境":"#ffedd5","过境火车":"#ffedd5","餐饮":"#fef3c7","餐饮/酒店":"#fef3c7","收尾":"#e5e7eb"
+};
+let events = [];
+let selectedId = null;
+let weekStart = new Date("2026-07-11T00:00:00");
+const startHour = 6, endHour = 24, pxPerHour = 60;
+
+function pad(n){return String(n).padStart(2,"0")}
+function fmtDate(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+function cnWeek(d){return "日一二三四五六"[d.getDay()]}
+function addDays(d,n){let x=new Date(d); x.setDate(x.getDate()+n); return x}
+function minOf(t){let [h,m]=t.split(":").map(Number); return h*60+(m||0)}
+function download(name, content, type="text/plain"){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+function initTypeOptions(){
+  const sel=document.getElementById("editType");
+  sel.innerHTML="";
+  Object.keys(typeColors).forEach(t=>{
+    const o=document.createElement("option"); o.value=t; o.textContent=t; sel.appendChild(o);
+  });
+}
+function loadDemo(){events=JSON.parse(JSON.stringify(demoEvents)); selectedId=null; weekStart=new Date("2026-07-11T00:00:00"); render();}
+function fillExampleText(){document.getElementById("rawText").value = demoText;}
+function clearAll(){if(confirm("确定清空当前事件？")){events=[]; selectedId=null; render();}}
+function saveLocal(){localStorage.setItem("tripCalendarEvents", JSON.stringify(events)); alert("已保存到当前浏览器。");}
+function loadLocal(){const s=localStorage.getItem("tripCalendarEvents"); if(s){events=JSON.parse(s); render();}else alert("没有找到本地保存。");}
+
+function inferType(text,title){
+  const s=(text+" "+title);
+  if(/过境|通关|口岸|格罗迭科沃|绥芬河/.test(s)) return /火车|列车/.test(s) ? "过境火车":"过境";
+  if(/火车上|夜车|卧铺|坐火车|动车|列车/.test(s)) return "火车";
+  if(/住宿|入住|酒店|民宿/.test(s)) return "酒店";
+  if(/吃|餐|美食|海鲜|菜/.test(s)) return "餐饮";
+  if(/→|前往|返回|抵达|转场/.test(s)) return "交通";
+  return "游览";
+}
+function inferTime(text,title,type){
+  const s=text+" "+title;
+  const exact=s.match(/(\d{1,2}:\d{2})\s*[—\-–~到]\s*(\d{1,2}:\d{2})/);
+  if(exact) return [exact[1], exact[2]];
+  if(/火车上|继续火车/.test(s)) return ["08:00","23:30"];
+  if(/夜车|晚上坐火车|晚上或下午坐火车/.test(s)) return ["20:00","23:30"];
+  if(/下午\/晚上|下午或晚上|下午.*火车/.test(s)) return ["16:00","23:30"];
+  if(/始发时间.*15:43|15:43/.test(s)) return ["15:43","18:30"];
+  if(/上午/.test(s)) return ["09:00","12:30"];
+  if(/下午/.test(s)) return ["14:00","18:00"];
+  if(/晚上/.test(s)) return ["18:00","21:00"];
+  if(/白天|一日游|全天/.test(s)) return ["09:00","17:00"];
+  if(/抵达/.test(s)) return ["08:00","10:00"];
+  if(type==="酒店") return ["19:00","20:00"];
+  if(type==="餐饮") return ["18:30","20:30"];
+  return ["10:00","12:00"];
+}
+function parseText(){
+  const raw=document.getElementById("rawText").value.trim();
+  if(!raw){alert("先粘贴一段行程文字。");return;}
+  const blocks=[];
+  const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  let cur=null;
+  for(const line of lines){
+    const m=line.match(/^D\s*(\d+)[，,\s]*([0-9]{1,2})月([0-9]{1,2})日[：:]\s*(.+)$/i);
+    if(m){
+      if(cur) blocks.push(cur);
+      cur={day:Number(m[1]), month:Number(m[2]), date:Number(m[3]), title:m[4].trim(), body:[]};
+    }else if(cur){cur.body.push(line);}
+  }
+  if(cur) blocks.push(cur);
+  if(blocks.length===0){alert("没有识别到 D1，7月11日：... 这种日期行。");return;}
+  const out=[];
+  let idn=1;
+  for(const b of blocks){
+    const d=`2026-${pad(b.month)}-${pad(b.date)}`;
+    const body=b.body.join(" ");
+    let title=b.title;
+    let type=inferType(body,title);
+    let [st,en]=inferTime(body,title,type);
+    out.push({id:"p"+(idn++),date:d,start:st,end:en,type,city:title.includes("→")?title:"",title,details:body.slice(0,180),note:"文本识别",color:typeColors[type]||"#e5e7eb"});
+    // 住宿行单独识别
+    const hotelLine=b.body.find(x=>/^住宿[:：]/.test(x));
+    if(hotelLine && !/火车卧铺/.test(hotelLine)){
+      out.push({id:"p"+(idn++),date:d,start:"19:00",end:"20:00",type:"酒店",city:title,title:"住宿安排",details:hotelLine.replace(/^住宿[:：]\s*/,""),note:"文本识别",color:typeColors["酒店"]});
+    }
+    // 美食/推荐吃单独识别
+    const foodLine=b.body.find(x=>/推荐吃|美食|海鲜晚餐/.test(x));
+    if(foodLine){
+      out.push({id:"p"+(idn++),date:d,start:"18:30",end:"20:30",type:"餐饮",city:title,title:"餐饮/美食",details:foodLine,note:"文本识别",color:typeColors["餐饮"]});
+    }
+  }
+  events=out;
+  selectedId=null;
+  weekStart=new Date(events[0].date+"T00:00:00");
+  render();
+  alert(`已识别 ${events.length} 个时间块。可继续点选修正时间。`);
+}
+
+function render(){
+  renderCalendar();
+  renderTable();
+  updateEditor();
+}
+function renderCalendar(){
+  const cal=document.getElementById("calendar");
+  cal.innerHTML="";
+  const end=addDays(weekStart,6);
+  document.getElementById("weekTitle").textContent=`${fmtDate(weekStart)} — ${fmtDate(end)}`;
+  const corner=document.createElement("div"); corner.className="corner"; corner.textContent="时间"; cal.appendChild(corner);
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i);
+    const h=document.createElement("div"); h.className="dayHead"; h.textContent=`${d.getMonth()+1}/${d.getDate()}\n周${cnWeek(d)}`; cal.appendChild(h);
+  }
+  const timebar=document.createElement("div"); timebar.className="timebar";
+  for(let h=startHour;h<endHour;h++){
+    const ts=document.createElement("div"); ts.className="timeSlot"; ts.textContent=`${pad(h)}:00`; timebar.appendChild(ts);
+  }
+  cal.appendChild(timebar);
+  for(let i=0;i<7;i++){
+    const d=fmtDate(addDays(weekStart,i));
+    const col=document.createElement("div"); col.className="dayCol"; col.dataset.date=d;
+    col.ondblclick=(ev)=>{const rect=col.getBoundingClientRect(); const y=ev.clientY-rect.top; const mins=Math.round((y/pxPerHour*60+startHour*60)/30)*30; addEvent(d, `${pad(Math.floor(mins/60))}:${pad(mins%60)}`)};
+    events.filter(e=>e.date===d).forEach(e=>{
+      const top=Math.max(0,(minOf(e.start)-startHour*60)/60*pxPerHour);
+      const height=Math.max(28,(minOf(e.end)-minOf(e.start))/60*pxPerHour);
+      const div=document.createElement("div");
+      div.className="event"+(e.id===selectedId?" selected":"");
+      div.style.top=top+"px"; div.style.height=height+"px"; div.style.background=e.color||typeColors[e.type]||"#e5e7eb";
+      div.contentEditable=true;
+      div.innerHTML=`<div class="title">${escapeHtml(e.title)}</div><div class="meta">${e.start}–${e.end} · ${escapeHtml(e.city||e.type)}</div>`;
+      div.onclick=(evt)=>{evt.stopPropagation(); selectedId=e.id; render();};
+      div.onblur=()=>{ // first line becomes title
+        const txt=div.innerText.trim().split(/\n/)[0]; if(txt) e.title=txt; renderTable(); updateEditor();
+      };
+      col.appendChild(div);
+    });
+    cal.appendChild(col);
+  }
+}
+function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+function renderTable(){
+  const tbl=document.getElementById("eventTable");
+  const headers=["日期","开始","结束","类型","城市/路线","标题"];
+  tbl.innerHTML="<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead>";
+  const body=document.createElement("tbody");
+  [...events].sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start)).forEach(e=>{
+    const tr=document.createElement("tr"); if(e.id===selectedId) tr.style.background="#eff6ff";
+    ["date","start","end","type","city","title"].forEach(k=>{
+      const td=document.createElement("td"); td.contentEditable=true; td.textContent=e[k]||"";
+      td.onfocus=()=>{selectedId=e.id; updateEditor();};
+      td.onblur=()=>{e[k]=td.textContent.trim(); if(k==="type") e.color=typeColors[e.type]||e.color; render();};
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  tbl.appendChild(body);
+}
+function updateEditor(){
+  const e=events.find(x=>x.id===selectedId);
+  document.getElementById("editId").value=e?e.id:"";
+  document.getElementById("editTitle").value=e?e.title:"";
+  document.getElementById("editDate").value=e?e.date:"";
+  document.getElementById("editStart").value=e?e.start:"";
+  document.getElementById("editEnd").value=e?e.end:"";
+  document.getElementById("editType").value=e?e.type:"游览";
+  document.getElementById("editCity").value=e?e.city:"";
+  document.getElementById("editDetails").value=e?e.details:"";
+}
+function updateTypeColor(){
+  const type=document.getElementById("editType").value;
+  const e=events.find(x=>x.id===selectedId);
+  if(e){e.color=typeColors[type]||"#e5e7eb";}
+}
+function updateSelected(){
+  const e=events.find(x=>x.id===selectedId); if(!e) return;
+  e.title=document.getElementById("editTitle").value;
+  e.date=document.getElementById("editDate").value;
+  e.start=document.getElementById("editStart").value;
+  e.end=document.getElementById("editEnd").value;
+  e.type=document.getElementById("editType").value;
+  e.city=document.getElementById("editCity").value;
+  e.details=document.getElementById("editDetails").value;
+  e.color=typeColors[e.type]||e.color;
+  renderCalendar(); renderTable();
+}
+function addEvent(d, st){
+  const dateVal=d || document.getElementById("editDate").value || fmtDate(weekStart);
+  const startVal=st || "10:00";
+  const endVal=(()=>{
+    const m=minOf(startVal)+60; return `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+  })();
+  const e={id:"n"+Date.now(),date:dateVal,start:startVal,end:endVal,type:"游览",city:"",title:"新事件",details:"",note:"手动新增",color:typeColors["游览"]};
+  events.push(e); selectedId=e.id; render();
+}
+function deleteSelected(){
+  if(!selectedId) return;
+  events=events.filter(e=>e.id!==selectedId); selectedId=null; render();
+}
+function moveWeek(n){weekStart=addDays(weekStart,n); renderCalendar();}
+function exportCSV(){
+  const head=["日期","开始","结束","类型","城市/路线","标题","详情","备注"];
+  const rows=[head].concat(events.map(e=>[e.date,e.start,e.end,e.type,e.city,e.title,e.details,e.note||""]));
+  const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  download("trip-calendar-events.csv",csv,"text/csv;charset=utf-8");
+}
+function exportJSON(){download("trip-calendar-events.json",JSON.stringify(events,null,2),"application/json");}
+function exportICS(){
+  function icsDate(d,t){return d.replaceAll("-","")+"T"+t.replace(":","")+"00";}
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Trip Calendar//CN"];
+  for(const e of events){
+    lines.push("BEGIN:VEVENT");
+    lines.push("UID:"+e.id+"@trip-calendar");
+    lines.push("DTSTAMP:20260701T000000Z");
+    lines.push("DTSTART:"+icsDate(e.date,e.start));
+    lines.push("DTEND:"+icsDate(e.date,e.end));
+    lines.push("SUMMARY:"+String(e.title||"").replace(/\n/g," "));
+    lines.push("DESCRIPTION:"+String((e.city||"")+" "+(e.details||"")).replace(/\n/g," "));
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  download("trip-calendar.ics",lines.join("\r\n"),"text/calendar;charset=utf-8");
+}
+initTypeOptions();
+loadDemo();
+</script>
+</body>
+</html>
